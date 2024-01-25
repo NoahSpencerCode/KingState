@@ -10,7 +10,7 @@ The module can be required in both scripts and local-scripts. All methods exclud
 
 Place the StateManager module in ReplicatedStorage so that it can be used by both server and client.
 
-require and the init a new Domain like this:
+Require the module. Then initialize a new Domain like this:
 
 ```lua
 local StateManager = require(game.ReplicatedStorage.StateManager)
@@ -59,7 +59,7 @@ domain:write('myState', domain:read('myState')+1) -- Example to increment a stat
 ## connectDomain()
 
 A helpful feature of StateManager is to be able to connect to domains across other scripts, even across client and server.
-connecting a state works like this.
+Connecting a domain works like this.
 
 ```lua
 local otherScriptDomain = StateManager.connectDomain('otherScriptDomain')
@@ -71,12 +71,65 @@ otherScriptDomain:waitToWrite('Sprint', true)
 local vehicleSpeed = otherScriptDomain:read('vehicleSpeed')
 
 ```
-note: you cannot define a state from a connected domain
+>[!NOTE]
+> You cannot define a state from a connected domain
 
+## Connecting to a server domain from client
 
+To connect to a server domain you must set the remote value to true when initializing the server domain. This setting will allow clients to connect to the domain.
 
+### Server Script
+```lua
+local serverDomain = StateManager.initDomain({ name = 'serverDomain', remote = true })
+```
+### Local Script
+```lua
+local serverDomain = StateManager.connectDomain('serverDomain')
+```
 
+## Connecting to client domain from server
 
+To connect to a client domain from a server script, you first need to call the allowRemoteClient function from the StateManager.
+Then set the remote setting to true in the client domain init.
+Finally when connecting to the client domain, the player name has to be specified at the end after double colons "::"
+Heres an example with both local script and server script:
+
+### Server Script
+```lua
+local StateManager = require(game.ReplicatedStorage.StateManager)
+
+StateManager.allowRemoteClient()
+
+game.Players.PlayerAdded:Connect(function(player)
+	
+	local theClientDomain = StateManager.connectDomain('theClientDomain::'..player.Name)
+	
+	theClientDomain:waitToWrite('playerState', 'winner')
+	
+end)
+
+```
+### Local Script
+```lua
+local StateManager = require(game.ReplicatedStorage.StateManager)
+
+local myDomain = StateManager.initDomain({ name = 'theClientDomain', remote = true }) --remember to set remote to true
+
+local playerState = myDomain:define('playerState', function(currentValue, newValue)
+	print("playerStateAction ",currentValue,newValue)
+end)
+
+```
+
+\
+\
+\
+\
+\
+\
+\
+\
+\
 
 
 
