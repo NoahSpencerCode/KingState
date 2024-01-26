@@ -1,6 +1,8 @@
 # StateManager
 A Lua Module for the Roblox Engine
 
+try it: https://create.roblox.com/store/asset/16115485990/StateManage%3Fkeyword=&pageNumber=&pagePosition=
+
 The StateManager module allows for an easy management of states and methods across scripts on both server and client.
 Helping the developer to cut down on manually creating remote and bindable functions. And allowing easy access and replication of states across the game.
 
