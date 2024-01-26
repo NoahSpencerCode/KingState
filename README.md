@@ -1,32 +1,32 @@
-# StateManager
+# KingState
 A Lua Module for the Roblox Engine
 
 try it: https://create.roblox.com/store/asset/16115485990/StateManage%3Fkeyword=&pageNumber=&pagePosition=
 
-The StateManager module allows for an easy management of states and methods across scripts on both server and client.
+The KingState module allows for an easy management of states and methods across scripts on both server and client.
 Helping the developer to cut down on manually creating remote and bindable functions. And allowing easy access and replication of states across the game.
 
 The module can be required in both scripts and local-scripts. All methods excluding "allowRemoteClient()" are the same between script and local-script.
 
 ## initDomain()
 
-Place the StateManager module in ReplicatedStorage so that it can be used by both server and client.
+Place the KingState module in ReplicatedStorage so that it can be used by both server and client.
 
 Require the module. Then initialize a new Domain like this:
 
 ```lua
-local StateManager = require(game.ReplicatedStorage.StateManager)
+local KingState = require(game.ReplicatedStorage.KingState)
 
-local domain = StateManager.initDomain({ name = 'myDomain' })
+local domain = KingState.initDomain({ name = 'myDomain' })
 
 ```
 
 Defining a new state. You can add as many states as you like to a domain
 
 ```lua
-local StateManager = require(game.ReplicatedStorage.StateManager)
+local KingState = require(game.ReplicatedStorage.KingState)
 
-local domain = StateManager.initDomain({ name = 'myDomain' })
+local domain = KingState.initDomain({ name = 'myDomain' })
 
 domain:define('myState')
 
@@ -35,9 +35,9 @@ domain:define('myState')
 You can also add action functions to a state. Actions will be called when the state changes. If you define a state multiple times it will add your new actions to the state. You can define as many actions as you would like, they will all be called when the state changes.
 
 ```lua
-local StateManager = require(game.ReplicatedStorage.StateManager)
+local KingState = require(game.ReplicatedStorage.KingState)
 
-local domain = StateManager.initDomain({ name = 'myDomain' })
+local domain = KingState.initDomain({ name = 'myDomain' })
 
 domain:define('myState', function(currentValue, newValue) --the currentValue and the newValue of the state will be passed in
   print("myStateAction",currentValue,newValue)
@@ -60,11 +60,11 @@ domain:write('myState', domain:read('myState')+1) -- Example to increment a stat
 
 ## connectDomain()
 
-A helpful feature of StateManager is to be able to connect to domains across other scripts, even across client and server.
+A helpful feature of KingState is to be able to connect to domains across other scripts, even across client and server.
 Connecting a domain works like this.
 
 ```lua
-local otherScriptDomain = StateManager.connectDomain('otherScriptDomain')
+local otherScriptDomain = KingState.connectDomain('otherScriptDomain')
 
 otherScriptDomain:write('DisplayMenu', false)
 
@@ -82,29 +82,29 @@ To connect to a server domain you must set the remote value to true when initial
 
 ### Server Script
 ```lua
-local serverDomain = StateManager.initDomain({ name = 'serverDomain', remote = true })
+local serverDomain = KingState.initDomain({ name = 'serverDomain', remote = true })
 ```
 ### Local Script
 ```lua
-local serverDomain = StateManager.connectDomain('serverDomain')
+local serverDomain = KingState.connectDomain('serverDomain')
 ```
 
 ## Connecting to client domain from server
 
-To connect to a client domain from a server script, you first need to call the allowRemoteClient function from the StateManager.
+To connect to a client domain from a server script, you first need to call the allowRemoteClient function from the KingState.
 Then set the remote setting to true in the client domain init.
 Finally when connecting to the client domain, the player name has to be specified at the end after double colons "::"
 Heres an example with both local script and server script:
 
 ### Server Script
 ```lua
-local StateManager = require(game.ReplicatedStorage.StateManager)
+local KingState = require(game.ReplicatedStorage.KingState)
 
-StateManager.allowRemoteClient()
+KingState.allowRemoteClient()
 
 game.Players.PlayerAdded:Connect(function(player)
 	
-	local theClientDomain = StateManager.connectDomain('theClientDomain::'..player.Name)
+	local theClientDomain = KingState.connectDomain('theClientDomain::'..player.Name)
 	
 	theClientDomain:waitToWrite('playerState', 'winner')
 	
@@ -113,9 +113,9 @@ end)
 ```
 ### Local Script
 ```lua
-local StateManager = require(game.ReplicatedStorage.StateManager)
+local KingState = require(game.ReplicatedStorage.KingState)
 
-local myDomain = StateManager.initDomain({ name = 'theClientDomain', remote = true }) --remember to set remote to true
+local myDomain = KingState.initDomain({ name = 'theClientDomain', remote = true }) --remember to set remote to true
 
 local playerState = myDomain:define('playerState', function(currentValue, newValue)
 	print("playerStateAction ",currentValue,newValue)
@@ -137,4 +137,4 @@ end)
 
 
 A simplified chart displaying how it works.
-![Screenshot 2024-01-25 at 12 54 27 PM](https://github.com/NoahSpencerCode/StateManager/assets/84402734/44ec9208-d0da-4f86-b0ac-ba731e207049)
+![Screenshot 2024-01-25 at 12 54 27 PM](https://github.com/NoahSpencerCode/KingState/assets/84402734/44ec9208-d0da-4f86-b0ac-ba731e207049)
