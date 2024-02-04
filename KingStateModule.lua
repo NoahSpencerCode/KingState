@@ -93,6 +93,11 @@ function KingState.initDomain(props)
 		return
 	end
 	
+	if isClient and props.datastore then
+		warn('Cannot init datastore domain in client')
+		return
+	end
+	
 	local state = {}
 	
 	function state:write(name, value)
