@@ -1,39 +1,95 @@
 local isClient = game:GetService('RunService'):IsClient()
 
+local DataStoreService = game:GetService("DataStoreService")
 
-local StateManager = {}
+local stores = {}
 
-local function useState(state, name, value, domain, waitFor, isRead)
-	if isRead then
-		if not state.values[name] then
-			warn(tostring(name).." : "..tostring(value)..' | state not found in '..tostring(domain))
+
+local KingState = {}
+
+local function useStore(req)
+	if not req.state.values[req.name] then
+		warn(tostring(req.name).." : "..tostring(req.value)..' | state not found in '..tostring(req.domain))
+		return
+	end
+	if req.isErase then
+		req.state.values[req.name] = nil
+		warn('Erasing a datastore state does not sync to the datastore, you must write the state to nil first, if that is your intension.')
+		return
+	end
+	if req.isRead then
+		local success, state = pcall(function()
+			return stores[req.domain]:GetAsync(req.name)
+		end)
+		if success and state ~= nil then
+			return state
+		else
+			return req.state.values[req.name].value
+		end
+	end
+	local actionValue = req.value
+	if req.state.values[req.name].action ~= nil then
+		actionValue = req.state.values[req.name].action(req.state.values[req.name].value,req.value)
+		if actionValue == nil then return end
+		req.state.values[req.name].value = actionValue
+		return actionValue
+	end
+	
+	local success, errorMessage = pcall(function()
+		stores[req.domain]:SetAsync(req.name, actionValue)
+	end)
+	if not success then
+		warn("KingState datastore set failed due to : "..errorMessage)
+		return false
+	end
+
+	req.state.values[req.name].value = actionValue
+	return actionValue
+end
+
+local function useState(req)
+	if req.isDataStore then
+		return useStore(req)
+	end
+	
+	if req.isRead then
+		if not req.state.values[req.name] then
+			warn(tostring(req.name).." : "..tostring(req.value)..' | state not found in '..tostring(req.domain))
 			return nil
 		end
-		return state.values[name].value
+		return req.state.values[req.name].value
 	end
 	
-	if waitFor then
+	if req.waitFor then
 		repeat
 			wait()
-		until state.values[name] ~= nil
+		until req.state.values[req.name] ~= nil
 	end
 	
-	if not state.values[name] then
-		warn(tostring(name).." : "..tostring(value)..' | state not found in '..tostring(domain))
+	if not req.state.values[req.name] then
+		warn(tostring(req.name).." : "..tostring(req.value)..' | state not found in '..tostring(req.domain))
 		return
 	end
 	
-	for i,v in ipairs(state.values[name].actions) do
-		v(state.values[name].value,value)
+	if req.isErase then
+		req.state.values[req.name] = nil
 	end
 	
-	state.values[name].value = value
-	return value
+	if req.state.values[req.name].action ~= nil then
+		local actionValue = req.state.values[req.name].action(req.state.values[req.name].value,req.value)
+		if actionValue == nil then return end
+		req.state.values[req.name].value = actionValue
+		return actionValue
+	end
+	
+	req.state.values[req.name].value = req.value
+	return req.value
 end
 
-function StateManager.initDomain(props)
+
+function KingState.initDomain(props)
 	if not props.name then 
-		warn('No name prop provided in StateManager.init => ', props)
+		warn('No name prop provided in KingState.init => ', props)
 		return
 	end
 	
@@ -41,41 +97,101 @@ function StateManager.initDomain(props)
 	
 	function state:write(name, value)
 		if not props.name then
-			warn('No name prop provided in StateManager.create => ', props)
+			warn('No name prop provided in KingState.write => ', props)
 			return
 		end
-		useState(self, name, value, props.name)
+		useState({
+			state = self,
+			name = name,
+			value = value,
+			domain = props.name,
+			isDataStore = props.datastore
+		})
 	end
 	
 	function state:waitToWrite(name, value)
 		if not props.name then
-			warn('No name prop provided in StateManager.create => ', props)
+			warn('No name prop provided in KingState.waitToWrite => ', props)
 			return
 		end
-		useState(self, name, value, props.name, true)
+		if props.datastore then
+			warn('Cannot use waitToWrite with DataStore')
+			return
+		end
+		useState({
+			state = self,
+			name = name,
+			value = value,
+			domain = props.name,
+			waitFor = true,
+		})
 	end
 	
-	function state:define(name, action)
+	function state:define(name, value, action)
 		if not props.name then
-			warn('No name prop provided in StateManager.create => ', props)
+			warn('No name prop provided in KingState:define => ', props)
 			return
+		end
+		
+		if props.datastore then
+			local success, state = pcall(function()
+				return stores[props.name]:GetAsync(name)
+			end)
+			if success then
+				if state ~= nil then
+					value = state
+				end
+			end
 		end
 		
 		if self.values[name] then
-			table.insert(self.values[name].actions, action)
+			self.values[name].action = action
+			self.values[name].value = value
 		else
 			self.values[name] = {
-				actions = {
-					action
-				}
+				action = action,
+				value = value
 			}
 		end
 		
-		return self.values[name]
+		return self:use(name)
 	end
 	
 	function state:read(name)
-		return useState(self, name, false, props.name, false, true)
+		return useState({
+			state = self,
+			name = name,
+			domain = props.name,
+			isRead = true,
+			isDataStore = props.datastore,
+		})
+	end
+	
+	function state:erase(name)
+		return useState({
+			state = self,
+			name = name,
+			domain = props.name,
+			isErase = true,
+			isDataStore = props.datastore,
+		})
+	end
+	
+	function state:use(name)
+		local controller = {}
+		function controller:write(value)
+			return state:write(name,value)
+		end
+		function controller:waitToWrite(value)
+			return state:waitToWrite(name, value)
+		end
+		function controller:read()
+			return state:read(name)
+		end
+		function controller:erase()
+			state:erase(name)
+		end
+		return controller
 	end
 	
 	state.values = {}
@@ -90,11 +206,20 @@ function StateManager.initDomain(props)
 	binder.Name = 'stateDomain.'..props.name
 	binder.Parent = dir
 	binder.OnInvoke = function(name, value, waitFor, isRead)
-		return useState(state, name, value, props.name, waitFor, isRead)
+		local req = {
+			state = state,
+			name = name,
+			value = value,
+			domain = props.name,
+			waitFor = waitFor,
+			isRead = isRead,
+			isDataStore = props.datastore,
+		}
+		return useState(req)
 	end
-		
+	local remote
 	if props.remote and isClient then
-		local remote = workspace:FindFirstChild("stateManager.allowRemoteClient")
+		remote = workspace:FindFirstChild("KingState.allowRemoteClient")
 		
 		if not remote then
 			warn('connection to server failed => allowRemoteClient is either not set to allowed or the server has not yet loaded.')
@@ -104,24 +229,50 @@ function StateManager.initDomain(props)
 				warn('connection to server failed => server did not return a remote')
 			else
 				myRemote.OnClientInvoke = function(name, value, waitFor, isRead)
-					return useState(state, name, value, props.name, waitFor, isRead)
+					return useState({
+						state = state,
+						name = name,
+						value = value,
+						domain = props.name,
+						waitFor = waitFor,
+						isRead = isRead,
+						isDataStore = props.datastore,
+					})
 				end
 			end
 		end
 		
 	elseif props.remote and not isClient then
-		local remote = Instance.new("RemoteFunction")
+		remote = Instance.new("RemoteFunction")
 		remote.Name = 'stateDomain.'..props.name
 		remote.Parent = workspace
 		remote.OnServerInvoke = function(player, name, value, waitFor, isRead)
-			return useState(state, name, value, props.name, waitFor, isRead)
+			return useState({
+				state = state,
+				name = name,
+				value = value,
+				domain = props.name,
+				waitFor = waitFor,
+				isRead = isRead,
+				isDataStore = props.datastore,
+			})
 		end
+	end
+	
+	if props.datastore then
+		stores[props.name] = DataStoreService:GetDataStore(props.name)
+	end
+	
+	function state:eraseDomain()
+		stores[props.name] = nil
+		binder:Destroy()
+		if remote then remote:Destroy() end
 	end
 	
 	return state
 end
 
-function StateManager.connectDomain(name)
+function KingState.connectDomain(name)
 	local dir = workspace
 	
 	if not isClient and not string.find(name, "::") then
@@ -144,6 +295,24 @@ function StateManager.connectDomain(name)
 			
 			function controller:read(name)
 				return binder:InvokeServer(name, false, false, true)
+			end
+	
+			function controller:use(name)
+				local subController = {}
+				function subController:write(value)
+					return controller:write(name,value)
+				end
+				function subController:waitToWrite(value)
+					return controller:waitToWrite(name, value)
+				end
+				function subController:read()
+					return controller:read(name)
+				end
+				function subController:erase()
+					warn('Cannot erase from a connected domain.')
+					return
+				end
+				return subController
 			end
 			
 		else
@@ -173,6 +342,23 @@ function StateManager.connectDomain(name)
 			function controller:read(name)
 				return binder:InvokeClient(name, false, false, true)
 			end
+			function controller:use(name)
+				local subController = {}
+				function subController:write(value)
+					return controller:write(name,value)
+				end
+				function subController:waitToWrite(value)
+					return controller:waitToWrite(name, value)
+				end
+				function subController:read()
+					return controller:read(name)
+				end
+				function subController:erase()
+					warn('Cannot erase from a connected domain.')
+					return
+				end
+				return subController
+			end
 		end
 	else
 		function controller:write(name, value)
@@ -186,29 +372,46 @@ function StateManager.connectDomain(name)
 		function controller:read(name)
 			return binder:Invoke(name, false, false, true)
 		end
+		function controller:use(name)
+			local subController = {}
+			function subController:write(value)
+				return controller:write(name,value)
+			end
+			function subController:waitToWrite(value)
+				return controller:waitToWrite(name, value)
+			end
+			function subController:read()
+				return controller:read(name)
+			end
+			function subController:erase()
+				warn('Cannot erase from a connected domain.')
+				return
+			end
+			return subController
+		end
 	end
 	
-	function controller:define()
-		warn('Cannot define in a connected domain.')
+	function controller:action()
+		warn('Cannot add action in a connected domain.')
 		return false
 	end
 	
 	return controller
 end
 
-function StateManager.allowRemoteClient()
+function KingState.allowRemoteClient()
 	if isClient then
 		warn('Cannot call this function from a localscript')
 		return
 	end
 	
-	if workspace:FindFirstChild("stateManager.allowRemoteClient") then
+	if workspace:FindFirstChild("KingState.allowRemoteClient") then
 		warn('allowRemoteClient already set')
 		return
 	end
 	
 	local remote = Instance.new("RemoteFunction")
-	remote.Name = 'stateManager.allowRemoteClient'
+	remote.Name = 'KingState.allowRemoteClient'
 	remote.Parent = workspace
 	remote.OnServerInvoke = function(player, name)
 		local newRemote = Instance.new("RemoteFunction")
@@ -219,4 +422,4 @@ function StateManager.allowRemoteClient()
 end
 
 
-return StateManager
+return KingState
